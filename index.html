@@ -36,7 +36,8 @@
       .sample-bar .pill, .sample-bar .right .optional { display: none; }
     }
 
-    #loading { padding: 48px 24px; font-family: "Geist Mono", monospace; color: #575c55; }
+    #loading, #load-error { margin: 0; padding: 48px 24px; font-family: "Geist Mono", monospace; color: #575c55; }
+    #loading[hidden], #load-error[hidden] { display: none; }
   </style>
 </head>
 <body>
@@ -51,7 +52,10 @@
     </nav>
   </header>
 
-  <div id="redoc"><p id="loading">Loading the API reference…</p></div>
+  <p id="loading">Loading the API reference…</p>
+  <p id="load-error" hidden>The reference couldn't load. View <a href="openapi.yaml">openapi.yaml</a> directly.</p>
+  <!-- Redoc owns everything inside this element; never write into it from other code. -->
+  <div id="redoc"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/redoc@2/bundles/redoc.standalone.js"></script>
   <script>
@@ -96,9 +100,10 @@
         codeBlock: { backgroundColor: "#0b0c0e" }
       }
     }, document.getElementById("redoc"), function (error) {
+      document.getElementById("loading").hidden = true;
       if (error) {
-        document.getElementById("redoc").innerHTML =
-          '<p id="loading">The reference couldn\'t load. View <a href="openapi.yaml">openapi.yaml</a> directly.</p>';
+        console.error("Redoc:", error);
+        document.getElementById("load-error").hidden = false;
       }
     });
   </script>
