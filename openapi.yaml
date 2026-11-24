@@ -5,8 +5,9 @@ info:
   version: 1.0.0
   summary: Create, find and manage reservations for venues and events.
   description: |
-    > **Portfolio sample.** This API is fictional. It was written by Desira Wijesundara to show how she
-    > documents a REST API as docs-as-code. It does not describe a real product.
+    > **Portfolio sample.** This API is fictional and does not describe a real product. The
+    > documentation was drafted with Claude (Anthropic's AI assistant) and reviewed by Desira
+    > Wijesundara, to demonstrate a docs-as-code workflow.
 
     The Reservations API lets you book products, such as tables, rooms or event tickets, for your
     customers, and keep those bookings in sync with your own systems.

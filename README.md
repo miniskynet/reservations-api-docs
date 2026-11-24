@@ -2,7 +2,9 @@
 
 [![Lint OpenAPI](https://github.com/miniskynet/reservations-api-docs/actions/workflows/lint.yml/badge.svg)](https://github.com/miniskynet/reservations-api-docs/actions/workflows/lint.yml)
 
-A docs-as-code sample by [Desira Wijesundara](https://miniskynet.github.io): the complete documentation for a small, **fictional** REST API, written, versioned and checked the way engineering teams treat code.
+A docs-as-code sample in [Desira Wijesundara's portfolio](https://miniskynet.github.io): the complete documentation for a small, **fictional** REST API, versioned and checked the way engineering teams treat code.
+
+> **Authorship:** the spec, guide and style guide were drafted with Claude (Anthropic's AI assistant) and reviewed by Desira Wijesundara.
 
 **[Open the interactive API reference →](https://miniskynet.github.io/reservations-api-docs/)**
 

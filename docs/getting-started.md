@@ -1,6 +1,6 @@
 # Get started with the Reservations API
 
-> **Portfolio sample.** The Reservations API is fictional. This guide was written by Desira Wijesundara to show how she writes task-based developer documentation.
+> **Portfolio sample.** The Reservations API is fictional. This guide was drafted with Claude (Anthropic's AI assistant) and reviewed by Desira Wijesundara, as an example of task-based developer documentation.
 
 In this guide you'll make your first reservation through the API: find a product and a customer, reserve a table, confirm it, and keep your own system in sync. It takes about ten minutes.
 
