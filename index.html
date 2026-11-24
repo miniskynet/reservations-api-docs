@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reservations API reference - a docs-as-code sample by Desira Wijesundara</title>
+  <meta name="description" content="Interactive API reference for a fictional Reservations API, generated from an OpenAPI 3.1 spec. A docs-as-code portfolio sample by Desira Wijesundara.">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%2315171C'/%3E%3Ctext x='32' y='43' font-family='Georgia,serif' font-size='30' fill='%23F6F4EF' text-anchor='middle'%3EDW%3C/text%3E%3Ccircle cx='50' cy='14' r='5' fill='%23F0875F'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root { --bar-h: 52px; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #fffdf9; font-family: "Geist", system-ui, sans-serif; }
+
+    .sample-bar {
+      position: sticky; top: 0; z-index: 10;
+      height: var(--bar-h);
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      padding: 0 20px;
+      background: #15171c; color: #e6e8ee;
+      font-size: 14px;
+    }
+    .sample-bar a { color: #e6e8ee; text-decoration: none; }
+    .sample-bar a:hover { color: #f0875f; }
+    .sample-bar .left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .sample-bar .pill {
+      padding: 3px 9px; border-radius: 999px;
+      background: rgba(240, 135, 95, .16); color: #f2a57f;
+      font-family: "Geist Mono", monospace; font-size: 12px; white-space: nowrap;
+    }
+    .sample-bar .right { display: flex; gap: 18px; white-space: nowrap; }
+    .sample-bar .back { font-weight: 600; white-space: nowrap; }
+    @media (max-width: 640px) {
+      .sample-bar .pill, .sample-bar .right .optional { display: none; }
+    }
+
+    #loading { padding: 48px 24px; font-family: "Geist Mono", monospace; color: #575c55; }
+  </style>
+</head>
+<body>
+  <header class="sample-bar">
+    <div class="left">
+      <a class="back" href="https://miniskynet.github.io/#case-studies">← Desira Wijesundara</a>
+      <span class="pill">Portfolio sample · fictional API</span>
+    </div>
+    <nav class="right" aria-label="Sample links">
+      <a class="optional" href="https://github.com/miniskynet/reservations-api-docs/blob/main/docs/getting-started.md">Getting started</a>
+      <a href="https://github.com/miniskynet/reservations-api-docs">Source on GitHub ↗</a>
+    </nav>
+  </header>
+
+  <div id="redoc"><p id="loading">Loading the API reference…</p></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/redoc@2/bundles/redoc.standalone.js"></script>
+  <script>
+    Redoc.init("openapi.yaml", {
+      scrollYOffset: ".sample-bar",
+      hideDownloadButton: false,
+      expandResponses: "200,201",
+      requiredPropsFirst: true,
+      jsonSampleExpandLevel: 4,
+      hideHostname: false,
+      theme: {
+        spacing: { unit: 5, sectionHorizontal: 40, sectionVertical: 36 },
+        colors: {
+          primary: { main: "#a4442a" },
+          success: { main: "#1d6b45" },
+          text: { primary: "#15171c", secondary: "#575c55" },
+          border: { dark: "rgba(21,23,28,.22)", light: "rgba(21,23,28,.11)" },
+          http: {
+            get: "#a4442a", post: "#1d6b45", patch: "#7a5a12", delete: "#b3261e"
+          }
+        },
+        typography: {
+          fontSize: "15px",
+          lineHeight: "1.65",
+          fontFamily: "Geist, system-ui, sans-serif",
+          headings: { fontFamily: "Geist, system-ui, sans-serif", fontWeight: "600" },
+          code: {
+            fontFamily: "Geist Mono, ui-monospace, monospace",
+            fontSize: "13px",
+            color: "#a4442a",
+            backgroundColor: "#ebe8df"
+          },
+          links: { color: "#a4442a", visited: "#a4442a", hover: "#15171c" }
+        },
+        sidebar: {
+          width: "270px",
+          backgroundColor: "#f6f4ef",
+          textColor: "#15171c",
+          activeTextColor: "#a4442a"
+        },
+        rightPanel: { backgroundColor: "#17191d", width: "42%" },
+        codeBlock: { backgroundColor: "#0b0c0e" }
+      }
+    }, document.getElementById("redoc"), function (error) {
+      if (error) {
+        document.getElementById("redoc").innerHTML =
+          '<p id="loading">The reference couldn\'t load. View <a href="openapi.yaml">openapi.yaml</a> directly.</p>';
+      }
+    });
+  </script>
+</body>
+</html>

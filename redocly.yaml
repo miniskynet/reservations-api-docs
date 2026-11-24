@@ -1,0 +1,18 @@
+apis:
+  reservations@v1:
+    root: ./openapi.yaml
+
+extends:
+  - recommended
+
+rules:
+  # The sample deliberately uses example.com: it's a fictional API.
+  no-server-example.com: off
+  # Examples must match their schemas.
+  no-invalid-media-type-examples: error
+  no-invalid-schema-examples: error
+  # Every operation documents at least one error response.
+  operation-4xx-response: error
+  # Every operation and tag carries a description.
+  operation-description: error
+  tag-description: error

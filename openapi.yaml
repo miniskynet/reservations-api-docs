@@ -1,0 +1,1118 @@
+openapi: 3.1.0
+
+info:
+  title: Reservations API
+  version: 1.0.0
+  summary: Create, find and manage reservations for venues and events.
+  description: |
+    > **Portfolio sample.** This API is fictional. It was written by Desira Wijesundara to show how she
+    > documents a REST API as docs-as-code. It does not describe a real product.
+
+    The Reservations API lets you book products, such as tables, rooms or event tickets, for your
+    customers, and keep those bookings in sync with your own systems.
+
+    **New here?** Start with the
+    [getting-started guide](https://github.com/miniskynet/reservations-api-docs/blob/main/docs/getting-started.md).
+    It takes you from an API key to your first confirmed reservation in about ten minutes.
+
+    ## Authentication
+
+    Every request needs an API key, sent as a bearer token in the `Authorization` header:
+
+    ```http
+    Authorization: Bearer rk_test_8d2f0c6a9b1e4f7a
+    ```
+
+    - Keys that start with `rk_test_` work only in the sandbox.
+    - Keys that start with `rk_live_` work only in production.
+
+    A request with a missing or invalid key, or a key for the other environment, returns `401 Unauthorized`.
+
+    ## Environments
+
+    | Environment | Base URL | Use it for |
+    |---|---|---|
+    | Sandbox | `https://sandbox.api.example.com/v1` | Building and testing. Sandbox data resets every Sunday at 00:00 UTC. |
+    | Production | `https://api.example.com/v1` | Live reservations. |
+
+    ## Pagination
+
+    List endpoints return results one page at a time. Use `page` and `size` to move through the
+    results, and read `meta.total` to see how many results match in total.
+
+    ```json
+    "meta": { "page": 2, "size": 25, "total": 48 }
+    ```
+
+    In this example, 48 reservations match. Page 2 holds results 26 to 48, and there is no page 3.
+
+    ## Sorting and related records
+
+    - `sort` takes one field name. Add a `-` prefix to sort in descending order, for example `sort=-start`.
+    - `include` returns related records in the same response, so you don't need a second request.
+      Separate multiple values with commas, for example `include=customer,items`.
+
+    ## Dates and times
+
+    All dates and times use ISO 8601 format in UTC, for example `2030-05-01T10:00:00Z`. If you send a
+    time with an offset, such as `2030-05-01T15:30:00+05:30`, the API converts it to UTC before storing it.
+
+    ## Errors
+
+    Errors use standard HTTP status codes and always return the same body:
+
+    ```json
+    {
+      "error": {
+        "code": "validation_error",
+        "message": "start is required",
+        "field": "start",
+        "request_id": "req_8f2a91"
+      }
+    }
+    ```
+
+    - `code` is stable, so you can branch on it in your code.
+    - `message` is written for people. It can change, so don't parse it.
+    - `field` names the request field that caused the error. It's `null` when no single field is to blame.
+    - `request_id` identifies the request. Include it when you contact support.
+
+    | Status | What it means | What to do |
+    |---|---|---|
+    | `400` | A required field is missing or a value is invalid. | Fix the field named in `error.field`, then retry. |
+    | `401` | The API key is missing, invalid, or for the other environment. | Check the key and the base URL. |
+    | `404` | The resource, or a resource it refers to, doesn't exist. | Check the IDs in the path and the body. |
+    | `409` | The request conflicts with the resource's current state. | Fetch the resource to see its current state. |
+    | `429` | You've sent too many requests. | Wait for the number of seconds in `Retry-After`, then retry. |
+    | `500` | Something went wrong on our side. | Retry with backoff. If it keeps happening, contact support with the `request_id`. |
+
+    ## Rate limits
+
+    Each API key can make 600 requests per minute. Every response includes a `RateLimit-Remaining`
+    header, so you can slow down before you reach the limit.
+
+    ## Retrying safely
+
+    A network error can leave you unsure whether a `POST` succeeded. Send an `Idempotency-Key` header
+    with every create request. If you retry with the same key within 24 hours, the API returns the
+    original result instead of creating a duplicate.
+  contact:
+    name: Desira Wijesundara
+    url: https://miniskynet.github.io
+  license:
+    name: CC BY 4.0
+    url: https://creativecommons.org/licenses/by/4.0/
+
+servers:
+  - url: https://sandbox.api.example.com/v1
+    description: Sandbox
+  - url: https://api.example.com/v1
+    description: Production
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Reservations
+    description: |
+      A reservation books one or more products for a customer at a specific start time.
+
+      Every reservation has a status:
+
+      | Status | Meaning |
+      |---|---|
+      | `pending` | Created but not yet confirmed. Capacity is held for 30 minutes, then released. |
+      | `confirmed` | Confirmed. Capacity is held until the reservation is cancelled. |
+      | `cancelled` | Cancelled. Capacity is released. This is final. |
+
+      A reservation moves from `pending` to `confirmed` when you update its `status`, and to
+      `cancelled` when you [cancel it](#tag/Reservations/operation/cancelReservation).
+  - name: Customers
+    description: |
+      A customer is the person or organisation a reservation is for. You manage customers in the
+      dashboard; the API lets you find them so you can use their IDs in reservations.
+  - name: Products
+    description: |
+      A product is anything that can be reserved, such as a table, a room or an event ticket. Each
+      product has a capacity per time slot. You manage products in the dashboard; the API lets you
+      list them so you can use their IDs in reservations.
+
+paths:
+  /reservations:
+    get:
+      operationId: listReservations
+      tags: [Reservations]
+      summary: List reservations
+      description: |
+        Returns a paginated list of reservations. Use filters to narrow the results, `sort` to order
+        them, and `include` to return related records in the same response.
+
+        By default, results are sorted by `created_at`, newest first. To keep list responses small,
+        `items` is returned only when you ask for it with `include=items`.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - name: status
+          in: query
+          description: Returns only reservations with this status.
+          schema:
+            $ref: '#/components/schemas/ReservationStatus'
+        - name: customer_id
+          in: query
+          description: Returns only reservations for this customer.
+          schema:
+            type: string
+            examples: [cus_310]
+        - name: start_from
+          in: query
+          description: Returns only reservations that start at or after this time.
+          schema:
+            type: string
+            format: date-time
+            examples: ['2030-05-01T00:00:00Z']
+        - name: start_to
+          in: query
+          description: |
+            Returns only reservations that start before this time. Together with `start_from`, this
+            selects a date range, for example one day:
+            `start_from=2030-05-01T00:00:00Z&start_to=2030-05-02T00:00:00Z`.
+          schema:
+            type: string
+            format: date-time
+            examples: ['2030-05-02T00:00:00Z']
+        - name: updated_from
+          in: query
+          description: |
+            Returns only reservations created or changed at or after this time, including
+            cancellations. Use it to sync only what changed since your last run, instead of
+            fetching every reservation again.
+          schema:
+            type: string
+            format: date-time
+            examples: ['2030-04-30T00:00:00Z']
+        - name: sort
+          in: query
+          description: |
+            Field to sort by. Add a `-` prefix for descending order.
+          schema:
+            type: string
+            enum: [start, -start, created_at, -created_at]
+            default: -created_at
+        - name: include
+          in: query
+          description: |
+            Related records to return with each reservation. Separate multiple values with commas.
+
+            - `customer` adds a `customer` object with the customer's details.
+            - `items` adds the reserved products and quantities.
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [customer, items]
+      responses:
+        '200':
+          description: A page of reservations. `data` is an empty array when nothing matches.
+          headers:
+            RateLimit-Remaining:
+              $ref: '#/components/headers/RateLimitRemaining'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationList'
+              examples:
+                confirmedWithCustomer:
+                  summary: Confirmed reservations, latest start first, with customer details
+                  description: |
+                    Request: `GET /reservations?status=confirmed&sort=-start&include=customer&size=1`
+                  value:
+                    data:
+                      - id: res_1042
+                        status: confirmed
+                        customer_id: cus_310
+                        customer:
+                          id: cus_310
+                          name: Jordan Lee
+                          email: jordan.lee@example.com
+                          phone: '+44 20 7946 0958'
+                          created_at: '2030-01-14T08:30:00Z'
+                        start: '2030-05-01T10:00:00Z'
+                        notes: null
+                        created_at: '2030-04-18T13:02:00Z'
+                        updated_at: '2030-04-18T13:20:00Z'
+                        cancelled_at: null
+                        cancellation_reason: null
+                    meta:
+                      page: 1
+                      size: 1
+                      total: 48
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+    post:
+      operationId: createReservation
+      tags: [Reservations]
+      summary: Create a reservation
+      description: |
+        Creates a reservation for a customer and returns it with its generated ID.
+
+        New reservations start as `pending` unless you set `status` to `confirmed`. A pending
+        reservation holds its capacity for 30 minutes. Confirm it within that time, or the capacity
+        is released for other customers.
+
+        If any product doesn't have enough capacity at `start`, the request fails with `409` and
+        nothing is reserved.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReservationCreate'
+            examples:
+              tableForTwo:
+                summary: A pending reservation with a note
+                value:
+                  customer_id: cus_310
+                  start: '2030-05-01T10:00:00Z'
+                  items:
+                    - product_id: prd_12
+                      quantity: 2
+                  notes: Window table requested
+      responses:
+        '201':
+          description: The reservation was created.
+          headers:
+            Location:
+              description: URL of the new reservation.
+              schema:
+                type: string
+                format: uri
+                examples: ['https://sandbox.api.example.com/v1/reservations/res_1043']
+            RateLimit-Remaining:
+              $ref: '#/components/headers/RateLimitRemaining'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Reservation'
+              examples:
+                created:
+                  summary: The new reservation
+                  value:
+                    data:
+                      id: res_1043
+                      status: pending
+                      customer_id: cus_310
+                      start: '2030-05-01T10:00:00Z'
+                      items:
+                        - product_id: prd_12
+                          quantity: 2
+                      notes: Window table requested
+                      created_at: '2030-04-20T09:15:00Z'
+                      updated_at: '2030-04-20T09:15:00Z'
+                      cancelled_at: null
+                      cancellation_reason: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: The `customer_id`, or a `product_id` in `items`, doesn't exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                unknownProduct:
+                  summary: A product ID doesn't exist
+                  value:
+                    error:
+                      code: not_found
+                      message: No product with ID prd_99 exists.
+                      field: items[0].product_id
+                      request_id: req_3c71de
+        '409':
+          description: A product doesn't have enough capacity at `start`. Nothing was reserved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noCapacity:
+                  summary: Not enough capacity
+                  value:
+                    error:
+                      code: insufficient_capacity
+                      message: prd_12 has 1 place left at 2030-05-01T10:00:00Z; 2 were requested.
+                      field: items[0].quantity
+                      request_id: req_77b0aa
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /reservations/{reservation_id}:
+    parameters:
+      - $ref: '#/components/parameters/ReservationId'
+    get:
+      operationId: getReservation
+      tags: [Reservations]
+      summary: Get a reservation
+      description: Returns one reservation, including its `items`.
+      parameters:
+        - name: include
+          in: query
+          description: |
+            Related records to return with the reservation. The only supported value is `customer`,
+            which adds a `customer` object with the customer's details.
+          schema:
+            type: string
+            enum: [customer]
+      responses:
+        '200':
+          description: The reservation.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Reservation'
+              examples:
+                confirmed:
+                  summary: A confirmed reservation
+                  value:
+                    data:
+                      id: res_1042
+                      status: confirmed
+                      customer_id: cus_310
+                      start: '2030-05-01T10:00:00Z'
+                      items:
+                        - product_id: prd_12
+                          quantity: 2
+                      notes: null
+                      created_at: '2030-04-18T13:02:00Z'
+                      updated_at: '2030-04-18T13:20:00Z'
+                      cancelled_at: null
+                      cancellation_reason: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+    patch:
+      operationId: updateReservation
+      tags: [Reservations]
+      summary: Update a reservation
+      description: |
+        Updates the fields you send and leaves the rest unchanged. Send at least one field.
+
+        - To confirm a pending reservation, send `"status": "confirmed"`.
+        - Sending `items` replaces the whole list. Include every product you want to keep.
+        - To remove the notes, send `"notes": null`.
+
+        You can't update a cancelled reservation, and you can't cancel one here. To cancel, use
+        [Cancel a reservation](#tag/Reservations/operation/cancelReservation).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReservationUpdate'
+            examples:
+              confirm:
+                summary: Confirm a pending reservation
+                value:
+                  status: confirmed
+              moveStart:
+                summary: Move to a new start time
+                value:
+                  start: '2030-05-01T12:30:00Z'
+      responses:
+        '200':
+          description: The updated reservation.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Reservation'
+              examples:
+                confirmed:
+                  summary: After confirming
+                  value:
+                    data:
+                      id: res_1043
+                      status: confirmed
+                      customer_id: cus_310
+                      start: '2030-05-01T10:00:00Z'
+                      items:
+                        - product_id: prd_12
+                          quantity: 2
+                      notes: Window table requested
+                      created_at: '2030-04-20T09:15:00Z'
+                      updated_at: '2030-04-20T09:21:00Z'
+                      cancelled_at: null
+                      cancellation_reason: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: |
+            The reservation is cancelled, or a product doesn't have enough capacity at the new
+            `start` or quantity. Nothing was changed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                cancelled:
+                  summary: The reservation is cancelled
+                  value:
+                    error:
+                      code: reservation_cancelled
+                      message: res_1040 is cancelled and can't be updated.
+                      field: null
+                      request_id: req_0d4e19
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /reservations/{reservation_id}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/ReservationId'
+    post:
+      operationId: cancelReservation
+      tags: [Reservations]
+      summary: Cancel a reservation
+      description: |
+        Cancels a reservation and releases its capacity straight away.
+
+        Cancelling can't be undone. To book the same products again, create a new reservation.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelRequest'
+            examples:
+              withReason:
+                summary: Cancel with a reason
+                value:
+                  reason: Customer called to cancel
+      responses:
+        '200':
+          description: The cancelled reservation.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Reservation'
+              examples:
+                cancelled:
+                  summary: After cancelling
+                  value:
+                    data:
+                      id: res_1043
+                      status: cancelled
+                      customer_id: cus_310
+                      start: '2030-05-01T10:00:00Z'
+                      items:
+                        - product_id: prd_12
+                          quantity: 2
+                      notes: Window table requested
+                      created_at: '2030-04-20T09:15:00Z'
+                      updated_at: '2030-04-22T16:40:00Z'
+                      cancelled_at: '2030-04-22T16:40:00Z'
+                      cancellation_reason: Customer called to cancel
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: The reservation is already cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                alreadyCancelled:
+                  summary: Already cancelled
+                  value:
+                    error:
+                      code: reservation_cancelled
+                      message: res_1043 is already cancelled.
+                      field: null
+                      request_id: req_a51c02
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /customers:
+    get:
+      operationId: listCustomers
+      tags: [Customers]
+      summary: List customers
+      description: Returns a paginated list of customers, sorted by name from A to Z.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - name: email
+          in: query
+          description: |
+            Returns only the customer with this email address. Matching ignores upper and lower case.
+          schema:
+            type: string
+            format: email
+            examples: [jordan.lee@example.com]
+      responses:
+        '200':
+          description: A page of customers. `data` is an empty array when nothing matches.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerList'
+              examples:
+                byEmail:
+                  summary: Find a customer by email
+                  description: 'Request: `GET /customers?email=jordan.lee@example.com`'
+                  value:
+                    data:
+                      - id: cus_310
+                        name: Jordan Lee
+                        email: jordan.lee@example.com
+                        phone: '+44 20 7946 0958'
+                        created_at: '2030-01-14T08:30:00Z'
+                    meta:
+                      page: 1
+                      size: 25
+                      total: 1
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /customers/{customer_id}:
+    get:
+      operationId: getCustomer
+      tags: [Customers]
+      summary: Get a customer
+      description: Returns one customer.
+      parameters:
+        - $ref: '#/components/parameters/CustomerId'
+      responses:
+        '200':
+          description: The customer.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Customer'
+              examples:
+                customer:
+                  summary: A customer
+                  value:
+                    data:
+                      id: cus_310
+                      name: Jordan Lee
+                      email: jordan.lee@example.com
+                      phone: '+44 20 7946 0958'
+                      created_at: '2030-01-14T08:30:00Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /products:
+    get:
+      operationId: listProducts
+      tags: [Products]
+      summary: List products
+      description: Returns a paginated list of the products you can reserve, sorted by name from A to Z.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: A page of products.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductList'
+              examples:
+                products:
+                  summary: Sandbox products
+                  value:
+                    data:
+                      - id: prd_14
+                        name: Private dining room
+                        capacity_per_slot: 1
+                        slot_minutes: 180
+                      - id: prd_20
+                        name: Tasting menu ticket
+                        capacity_per_slot: 24
+                        slot_minutes: 150
+                      - id: prd_12
+                        name: Window table for two
+                        capacity_per_slot: 6
+                        slot_minutes: 90
+                    meta:
+                      page: 1
+                      size: 25
+                      total: 3
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Your API key, sent as `Authorization: Bearer <key>`. Find your keys in the dashboard under
+        **Developers > API keys**. Keep live keys secret: anyone with a live key can create and
+        cancel reservations on your account.
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      description: Page number to return. Starts at 1.
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    Size:
+      name: size
+      in: query
+      description: Number of results per page.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+    ReservationId:
+      name: reservation_id
+      in: path
+      required: true
+      description: ID of the reservation, for example `res_1042`.
+      schema:
+        type: string
+        pattern: '^res_[0-9]+$'
+    CustomerId:
+      name: customer_id
+      in: path
+      required: true
+      description: ID of the customer, for example `cus_310`.
+      schema:
+        type: string
+        pattern: '^cus_[0-9]+$'
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: |
+        A unique value you generate, such as a UUID, so you can retry this request safely. If you
+        send the same key again within 24 hours, the API returns the original response instead of
+        creating a second reservation.
+      schema:
+        type: string
+        maxLength: 64
+        examples: [0f8fad5b-d9cb-469f-a165-70867728950e]
+
+  headers:
+    RateLimitRemaining:
+      description: Number of requests you can still make in the current one-minute window.
+      schema:
+        type: integer
+        examples: [597]
+    RetryAfter:
+      description: Number of seconds to wait before you retry.
+      schema:
+        type: integer
+        examples: [12]
+
+  schemas:
+    ReservationStatus:
+      type: string
+      enum: [pending, confirmed, cancelled]
+      description: |
+        - `pending`: created but not yet confirmed. Capacity is held for 30 minutes.
+        - `confirmed`: confirmed. Capacity is held until the reservation is cancelled.
+        - `cancelled`: cancelled. Capacity is released. This is final.
+
+    ReservationItem:
+      type: object
+      required: [product_id, quantity]
+      properties:
+        product_id:
+          type: string
+          description: ID of the product to reserve. Get product IDs from [List products](#tag/Products/operation/listProducts).
+          examples: [prd_12]
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 50
+          description: Number of places to reserve on this product.
+          examples: [2]
+
+    Reservation:
+      type: object
+      required: [id, status, customer_id, start, notes, created_at, updated_at, cancelled_at, cancellation_reason]
+      properties:
+        id:
+          type: string
+          readOnly: true
+          description: Unique ID of the reservation. Set by the API.
+          examples: [res_1042]
+        status:
+          $ref: '#/components/schemas/ReservationStatus'
+        customer_id:
+          type: string
+          description: ID of the customer the reservation is for.
+          examples: [cus_310]
+        customer:
+          $ref: '#/components/schemas/Customer'
+          description: The customer's details. Returned only when you request `include=customer`.
+        start:
+          type: string
+          format: date-time
+          description: When the reservation starts, in UTC.
+          examples: ['2030-05-01T10:00:00Z']
+        items:
+          type: array
+          minItems: 1
+          description: |
+            The reserved products and quantities. Always returned for a single reservation. In
+            lists, returned only when you request `include=items`.
+          items:
+            $ref: '#/components/schemas/ReservationItem'
+        notes:
+          type: [string, 'null']
+          maxLength: 500
+          description: Internal notes for your staff. Not shown to the customer. `null` when there are none.
+          examples: [Window table requested]
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: When the reservation was created. Set by the API.
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: When the reservation last changed, including cancellation. Set by the API.
+        cancelled_at:
+          type: [string, 'null']
+          format: date-time
+          readOnly: true
+          description: When the reservation was cancelled. `null` unless `status` is `cancelled`.
+        cancellation_reason:
+          type: [string, 'null']
+          readOnly: true
+          description: The reason sent when the reservation was cancelled. `null` if none was given.
+
+    ReservationCreate:
+      type: object
+      required: [customer_id, start, items]
+      properties:
+        customer_id:
+          type: string
+          description: ID of the customer making the reservation. Find it with [List customers](#tag/Customers/operation/listCustomers).
+          examples: [cus_310]
+        start:
+          type: string
+          format: date-time
+          description: Start time in ISO 8601 format. Must be in the future.
+          examples: ['2030-05-01T10:00:00Z']
+        items:
+          type: array
+          minItems: 1
+          maxItems: 20
+          description: Products to reserve. List each product once.
+          items:
+            $ref: '#/components/schemas/ReservationItem'
+        status:
+          type: string
+          enum: [pending, confirmed]
+          default: pending
+          description: |
+            Initial status. Send `confirmed` to skip the pending step, for example when the customer
+            has already paid.
+        notes:
+          type: string
+          maxLength: 500
+          description: Internal notes for your staff. Not shown to the customer.
+          examples: [Window table requested]
+
+    ReservationUpdate:
+      type: object
+      minProperties: 1
+      description: Send only the fields you want to change.
+      properties:
+        start:
+          type: string
+          format: date-time
+          description: New start time in ISO 8601 format. Must be in the future.
+          examples: ['2030-05-01T12:30:00Z']
+        items:
+          type: array
+          minItems: 1
+          maxItems: 20
+          description: Replaces the whole list of reserved products. Include every product you want to keep.
+          items:
+            $ref: '#/components/schemas/ReservationItem'
+        status:
+          type: string
+          enum: [confirmed]
+          description: Send `confirmed` to confirm a pending reservation. To cancel, use the cancel endpoint.
+        notes:
+          type: [string, 'null']
+          maxLength: 500
+          description: New internal notes. Send `null` to remove them.
+
+    CancelRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 200
+          description: Why the reservation was cancelled. Stored in `cancellation_reason` for your records.
+          examples: [Customer called to cancel]
+
+    Customer:
+      type: object
+      required: [id, name, email, phone, created_at]
+      properties:
+        id:
+          type: string
+          readOnly: true
+          description: Unique ID of the customer.
+          examples: [cus_310]
+        name:
+          type: string
+          description: Full name, as the customer gave it.
+          examples: [Jordan Lee]
+        email:
+          type: string
+          format: email
+          description: Email address. Unique across your customers.
+          examples: [jordan.lee@example.com]
+        phone:
+          type: [string, 'null']
+          description: Phone number in international format. `null` if the customer didn't give one.
+          examples: ['+44 20 7946 0958']
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: When the customer was added.
+
+    Product:
+      type: object
+      required: [id, name, capacity_per_slot, slot_minutes]
+      properties:
+        id:
+          type: string
+          readOnly: true
+          description: Unique ID of the product. Use it as `product_id` in reservation items.
+          examples: [prd_12]
+        name:
+          type: string
+          description: Name of the product, as shown to customers.
+          examples: [Window table for two]
+        capacity_per_slot:
+          type: integer
+          minimum: 1
+          description: |
+            Maximum total quantity that can be reserved for one start time, across all reservations.
+          examples: [6]
+        slot_minutes:
+          type: integer
+          minimum: 15
+          description: How long one reservation of this product lasts, in minutes.
+          examples: [90]
+
+    PaginationMeta:
+      type: object
+      required: [page, size, total]
+      properties:
+        page:
+          type: integer
+          description: The page returned.
+          examples: [1]
+        size:
+          type: integer
+          description: The page size used.
+          examples: [25]
+        total:
+          type: integer
+          description: Total number of results that match, across all pages.
+          examples: [48]
+
+    ReservationList:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reservation'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    CustomerList:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Customer'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    ProductList:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, field, request_id]
+          properties:
+            code:
+              type: string
+              description: |
+                Machine-readable error code. Stable, so you can branch on it.
+
+                | Code | Status |
+                |---|---|
+                | `validation_error` | 400 |
+                | `unauthorized` | 401 |
+                | `not_found` | 404 |
+                | `insufficient_capacity` | 409 |
+                | `reservation_cancelled` | 409 |
+                | `rate_limited` | 429 |
+                | `internal_error` | 500 |
+              enum:
+                - validation_error
+                - unauthorized
+                - not_found
+                - insufficient_capacity
+                - reservation_cancelled
+                - rate_limited
+                - internal_error
+            message:
+              type: string
+              description: What went wrong, written for people. It can change, so don't parse it.
+            field:
+              type: [string, 'null']
+              description: The request field that caused the error. `null` when no single field is to blame.
+            request_id:
+              type: string
+              description: ID of the request. Include it when you contact support.
+
+  responses:
+    BadRequest:
+      description: A required field is missing or a value is invalid. `error.field` names the field.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            missingField:
+              summary: A required field is missing
+              value:
+                error:
+                  code: validation_error
+                  message: start is required
+                  field: start
+                  request_id: req_8f2a91
+    Unauthorized:
+      description: The API key is missing, invalid, or for the other environment.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            wrongEnvironment:
+              summary: A sandbox key sent to production
+              value:
+                error:
+                  code: unauthorized
+                  message: rk_test_ keys only work with https://sandbox.api.example.com.
+                  field: null
+                  request_id: req_19c4b0
+    NotFound:
+      description: No resource with this ID exists.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            unknownReservation:
+              summary: The reservation doesn't exist
+              value:
+                error:
+                  code: not_found
+                  message: No reservation with ID res_9999 exists.
+                  field: null
+                  request_id: req_5e8d33
+    TooManyRequests:
+      description: You've sent more than 600 requests in a minute with this API key.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            rateLimited:
+              summary: Rate limit reached
+              value:
+                error:
+                  code: rate_limited
+                  message: Rate limit reached. Retry after 12 seconds.
+                  field: null
+                  request_id: req_c2f7e4
